@@ -158,7 +158,7 @@ class hybridControl(object):
 
         self.thormangPublishers.runOnThormang(self.angles, self.mutex, self.linkThreads, 0, PUB_TIMES)
 
-        self.model = load_model("/home/ricardo/catkin_ws/src/hybrid_control_api/scripts/model__10_4096_Adam_sigmoid_750_600_450_375_325_275_7_5807896_0.008620047295714497_0.007473068660180077_0.0009890548353295382.h5")
+        self.model = load_model("/home/ricardo/catkin_ws/src/hybrid_control_api/scripts/model__900_4096_Adam_sigmoid_750_600_450_375_325_275_7_5807896_0.007599880670611267_0.004151666958156932_0.0004033255656163133.h5")
 
 
         self.highestList = np.array([   0.07564,  0.09857,  0.09997,  0.26628,  0.29266,  0.31773,  0.281,   -0.70813, \
