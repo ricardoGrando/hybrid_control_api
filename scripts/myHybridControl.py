@@ -158,7 +158,7 @@ class hybridControl(object):
 
         self.thormangPublishers.runOnThormang(self.angles, self.mutex, self.linkThreads, 0, PUB_TIMES)
 
-        self.model = load_model("/home/ricardo/catkin_ws/src/hybrid_control_api/scripts/model__900_4096_Adam_sigmoid_750_600_450_375_325_275_7_5807896_0.007599880670611267_0.004151666958156932_0.0004033255656163133.h5")
+        self.model = load_model("~/catkin_ws/src/hybrid_control_api/scripts/model__900_4096_Adam_sigmoid_750_600_450_375_325_275_7_5807896_0.007599880670611267_0.004151666958156932_0.0004033255656163133.h5")
 
 
         self.highestList = np.array([   0.07564,  0.09857,  0.09997,  0.26628,  0.29266,  0.31773,  0.281,   -0.70813, \
@@ -168,17 +168,7 @@ class hybridControl(object):
         self.lowestList = np.array([    -0.08839, -0.09984, -0.09989, -0.29398, -0.2799,  -0.3064,  -0.29518, -1.37364, \
                                         0.35553 , 0.58017 ,-0.58044 , 0.23482 ,-1.3708 , -1.14339, -0.08727, -0.08727, \
                                         -0.08727, -0.08727, -0.08727, -0.08727, -0.08727])
-
-
-        #lowestList = pickle.load(open(path+"lowestsigmoid_5_0.15.pickle", "rb" ) )
-        # self.highestList = np.array([ 0.09866, 0.09623, 0.09961, 0.31315, 0.28198, 0.30473, 0.27169, 1.6, 1.6, \
-        #                                 1.59998, 1.3,     2.8,     1.4,     1.4,     0.08727, 0.08727, 0.08727, 0.08727,
-        #                                 0.08727, 0.08727, 0.08727])
-
-        # self.lowestList = np.array([    -0.09788, -0.09704, -0.09984, -0.30514, -0.27749, -0.31739, -0.28858, -1.6,
-        #                                 -1.6,     -1.6,     -1.3,     -2.8,     -1.4,     -1.4,     -0.08727, -0.08727,
-        #                                 -0.08727, -0.08727, -0.08727, -0.08727, -0.08727])
-
+        
         self.realEndEffector = self.endEffectorInitialPosition
 
         self.desiredPosition = np.array([ 0.535, 0.3, 0.16, 1.0, 0.0, 0.0, 0.0 ])
