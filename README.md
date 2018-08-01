@@ -24,5 +24,7 @@ Open new Terminal
 
 ***rosrun hybrid_control_api hanoiTower.py***  
 
+## Simulation on Gazebo
+
 [![Watch the video](https://github.com/ricardoGrando/hybrid_control_api/blob/master/git_data/video.png)](https://www.youtube.com/watch?v=O2vynMscfGA&t=826s)
 
