@@ -11,6 +11,7 @@ from keras.models import Model
 import csv
 from runOnThormang import *
 from utils import *
+from tf.transformations import *
 
 # cartesian position of the end effector
 endEffectorPosition = (    ['end_arm_position_x', 0.0],   
@@ -34,30 +35,32 @@ pubList =  [    '/thormang3/l_arm_sh_p1_position/command', # -1.6 to 1.6
                 '/thormang3/l_arm_grip_1_position/command' # -1.4 to 1.4
                 
             ]
+
+# Number of states to change a piece between two towers
+TOTAL_STATES = 9
+
+
 # Cartesian position of x. It is fixed. Only y and z changes
 x = 0.535
 # Minimum position distance between the actual and the goal to change the state
-ARRIVED_POS_THRESHOLD = 0.001
-# Threshold to go with net or jacobian. If cartesian position distance towards de goal is small then it goes with jacobian 
-NETORJACOBIAN_THRESHOLD = 0.1    
-# Number of states to change a piece between two towers
-TOTAL_STATES = 8
+ARRIVED_POS_THRESHOLD = 0.0005
+# Minimum orientation distance for W of a orientation x, y, z towards the goal. 
+ARRIVED_ORI_THRESHOLD = 0.0005
+# Threshold to go with net or jacobian. If cartesian position distance towards the goal is small then it goes with jacobian 
+NETORJACOBIAN_THRESHOLD = 0.05
 # Max step that the net goes towards the goal. THE MAX TRAINED STEP WAS 0.1
-MAX_STEP_NET = 0.03
-# Max step that jacobian does towards the goal. THE SMALLER THE SLOWER
-MAX_STEP_JACOBIAN = 0.001
-# Max of iterations during the inverse kinematics. Each MAX_PUBLISHER_COUNTER iterations is published in the joints
-MAX_PUBLISHER_COUNTER = 50
-
+MAX_STEP_NET = 0.05
+# Max step that jacobian does towards the goal. THE SMALLER THE SLOWER BUT WITH BEST ACCURACY
+MAX_STEP_JACOBIAN = 0.01
 # Height in Z for each of the four pieces in the tower. The last value in the upper tower value
-heightTowerList = [0.080, 0.115, 0.145, 0.175, 0.2]
+heightTowerList = [0.080, 0.115, 0.145, 0.175, 0.21]
 # Lenght in Y for the three towers.
 lengthTowerList = [0.15, 0.3, 0.45]
 # Number of time to publish the same thing in order to wait the gripper to close  
 GRIPPER_WAIT_MAX_TIME = 10
 # Gripper closing value
 GRIPPER_CLOSING = [1.0, 0.98, 0.96, 0.95]
-# Number of times to publish the desired value. GAZEBO HAS A BIG DELAY SO YOU MUST PUBLISH THE SAME VALUE MANY TIMES.
+# Number of times to publish the desired value. THE JOINTS HAVE A DELAY TO GET TO THE DESIRED POSE.
 PUB_TIMES = 200
 
 # Create the message for the forward/jacobian package. The seven joints of the arm and the desired catesian 
@@ -117,9 +120,8 @@ def call_ik_service(currJointPose, targetPosition, targetOrientation, deltaEnd):
     deltaEndEuler[4] = yEuler
     deltaEndEuler[5] = zEuler
 
-    # defines the deltangles
     deltaAngles = np.dot(inverseJacobian, deltaEndEuler)
-        
+       
     return deltaAngles  
 
 
@@ -145,7 +147,7 @@ class hybridControl(object):
         self.mutex = threading.Condition()        
         
         # Call ros service
-        call_ik_service(self.currJointPose, self.endEffectorInitialPosition[0:3], self.endEffectorInitialPosition[3:7], np.zeros(shape=(7,1)))
+        call_ik_service(self.currJointPose, self.endEffectorInitialPosition[0:3], self.endEffectorInitialPosition[3:7], np.zeros(shape=(7,)))
 
         # Creates the thread for each 
         for i in range(0, len(pubList)):
@@ -159,17 +161,19 @@ class hybridControl(object):
 
         self.thormangPublishers.runOnThormang(self.angles, self.mutex, self.linkThreads, 0, PUB_TIMES)
 
-        self.model = load_model("~/catkin_ws/src/hybrid_control_api/scripts/model__10_4096_Adam_sigmoid_750_600_450_375_325_275_7_5807896_0.008620047295714497_0.007473068660180077_0.0009890548353295382.h5")
+        self.model = load_model("/home/ricardo/catkin_ws/src/hybrid_control_api/scripts/model__10_2048_Adam_sigmoid_150_120_90_75_65_55_7_10000000_0.015973498610026306_0.01608150556329224_0.0009890548353295382.h5")
 
+        # full
+        self.highestList = np.array([   0.0996578,  0.09700995, 0.09993384, 0.33062578, 0.28312842, 0.31182562,\
+                                        0.27920513, 1.59999821, 1.59999794, 1.59999969, 1.29999984, 2.79999662,\
+                                        1.3999988 , 1.3999999 , 0.08726649, 0.08726648, 0.0872665,  0.0872665,\
+                                        0.08726646, 0.0872665,  0.08726644])
 
-        self.highestList = np.array([   0.07564,  0.09857,  0.09997,  0.26628,  0.29266,  0.31773,  0.281,   -0.70813, \
-                                        1.12953,  1.2883 ,  0.78934,  1.17896,  0.22479,  0.05314,  0.08727,  0.08727, \
-                                        0.08727,  0.08727,  0.08727,  0.08727,  0.08727])
+        self.lowestList = np.array([    -0.09980583, -0.09704175, -0.09984278, -0.31763874, -0.28009778, -0.31739168,\
+                                        -0.28857708, -1.59999977, -1.59999941, -1.59999798, -1.29999983, -2.79999956,\
+                                        -1.39999721, -1.39999988, -0.08726647, -0.08726649, -0.0872665,  -0.08726644,\
+                                        -0.08726649, -0.08726646, -0.08726647])
 
-        self.lowestList = np.array([    -0.08839, -0.09984, -0.09989, -0.29398, -0.2799,  -0.3064,  -0.29518, -1.37364, \
-                                        0.35553 , 0.58017 ,-0.58044 , 0.23482 ,-1.3708 , -1.14339, -0.08727, -0.08727, \
-                                        -0.08727, -0.08727, -0.08727, -0.08727, -0.08727])
-        
         self.realEndEffector = self.endEffectorInitialPosition
 
         self.desiredPosition = np.array([ 0.535, 0.3, 0.16, 1.0, 0.0, 0.0, 0.0 ])
@@ -217,11 +221,8 @@ class hybridControl(object):
         # set the new delta
         self.limitVector()
 
-        #print(self.desiredPosition)
-        #print (self.delta)
-        
         # verify the distance towards the desired
-        if np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3]) > ARRIVED_POS_THRESHOLD: # or (self.movementState == 2)  or (self.movementState == 5):
+        if np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3]) > ARRIVED_POS_THRESHOLD or ((self.desiredPosition-self.realEndEffector)[-1]) > ARRIVED_ORI_THRESHOLD: # or (self.movementState == 2)  or (self.movementState == 5):
             #"Usa a rede"
             if np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3]) > NETORJACOBIAN_THRESHOLD:
                 predictArray = np.array([   self.delta[0],
@@ -261,7 +262,7 @@ class hybridControl(object):
                                 ('l_arm_wr_p', self.angles[6])
                             ]
 
-                call_ik_service(self.currJointPose, self.desiredPosition[0:3], self.desiredPosition[3:7], np.zeros(shape=(7,1)))
+                call_ik_service(self.currJointPose, self.desiredPosition[0:3], self.desiredPosition[3:7], np.zeros(shape=(7,)))
 
                 self.realEndEffector = np.array([endEffectorPosition[0:][0][1], endEffectorPosition[1:][0][1], \
                                                     endEffectorPosition[2:][0][1], endEffectorPosition[3:][0][1], \
@@ -271,6 +272,8 @@ class hybridControl(object):
                 print("Norm total: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector))))
                 print("Norm pos: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3])))
                 print("Norm ori: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector)[3:])))
+
+                print(self.realEndEffector)
 
             # Usa o Jacobiano
             else:
@@ -282,17 +285,18 @@ class hybridControl(object):
                                 ('l_arm_wr_y', self.angles[5]),\
                                 ('l_arm_wr_p', self.angles[6])
                             ]
-
                 self.angles += call_ik_service(self.currJointPose, self.desiredPosition[0:3], self.desiredPosition[3:7], self.delta)
 
-                #if (np.linalg.norm((self.desiredPosition[0:3]-self.realEndEffector[0:3])) < ARRIVED_THRESHOLD*100):
-                if (self.publisherCounter >= MAX_PUBLISHER_COUNTER):
+                # Send to the topic when it gets close
+                if np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3])/ARRIVED_POS_THRESHOLD < 1.1 and ((self.desiredPosition-self.realEndEffector)[-1])/ARRIVED_ORI_THRESHOLD < 1.1:
                     self.thormangPublishers.runOnThormang(self.angles, self.mutex, self.linkThreads, self.gripper, PUB_TIMES)
                     self.publisherCounter = 0
                     print("Jacobian")
                     print("Norm total: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector))))
                     print("Norm pos: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3])))
                     print("Norm ori: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector)[3:])))
+
+                    print(self.realEndEffector)
                 else:
                     self.publisherCounter += 1           
                 
@@ -315,14 +319,17 @@ class hybridControl(object):
                                                     endEffectorPosition[2:][0][1], endEffectorPosition[3:][0][1], \
                                                     endEffectorPosition[4:][0][1], endEffectorPosition[5:][0][1], \
                                                     endEffectorPosition[6:][0][1]])
+
+
                 
         else:
-            if (self.movementState != 2 and self.movementState != 6):  
+            if (self.movementState != 2 and self.movementState != 6 and self.movementState != 7):  
                 if self.movementState == TOTAL_STATES-1:
                     self.movementState = 0
                     self.concluded = True                
                 else:     
                     self.movementState += 1
+                
             else:
                 self.thormangPublishers.runOnThormang(self.angles, self.mutex, self.linkThreads, self.gripper, PUB_TIMES)           
 
@@ -350,7 +357,7 @@ class hybridControl(object):
             z = heightTowerList[len(self.towers[fromTower])-1]
             self.setTarget(np.array([ x, y, z, 1.0, 0.0, 0.0, 0.0 ]))
 
-            self.waitForGripper = 0
+            self.waitForGripper = 0            
 
         elif self.movementState == 2:
             # GRAB and wait
@@ -392,9 +399,19 @@ class hybridControl(object):
             self.waitForGripper = 0
 
         elif self.movementState == 6:
-            # release the block and wait
-            self.gripper = 0
+            # release the block and wait            
 
+            if self.waitForGripper <= GRIPPER_WAIT_MAX_TIME:
+                self.waitForGripper += 1
+            else:
+                #self.waitForGripper = 0
+                self.movementState += 1
+
+                self.gripper = 0
+
+                self.waitForGripper = 0
+
+        elif self.movementState == 7:
             if self.waitForGripper <= GRIPPER_WAIT_MAX_TIME:
                 self.waitForGripper += 1
             else:

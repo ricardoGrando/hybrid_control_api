@@ -54,54 +54,58 @@ bool hybrid(hybrid_control_api::hybrid::Request &req,
   robotis_->calcForwardKinematics(2); 
 
 
-  // // calc werr
-
-  // Eigen::MatrixXd curr_position = robotis_->thormang3_link_data_[34]->position_;
-  // Eigen::MatrixXd curr_orientation = robotis_->thormang3_link_data_[34]->orientation_;
-
-  // //OS_INFO("Creating desired position.");
-  // Eigen::MatrixXd target_position  = Eigen::MatrixXd::Zero(3,1);
-  // target_position.coeffRef(0, 0) = req.desiredPose.position.x;
-  // target_position.coeffRef(1, 0) = req.desiredPose.position.y;
-  // target_position.coeffRef(2, 0) = req.desiredPose.position.z;
-
-  // //ROS_INFO("Creating desired orientation.");
-  // Eigen::MatrixXd target_rotation  = Eigen::MatrixXd::Zero(4,1);
-  // target_rotation.coeffRef(0, 0) = req.desiredPose.orientation.x;
-  // target_rotation.coeffRef(1, 0) = req.desiredPose.orientation.y;
-  // target_rotation.coeffRef(2, 0) = req.desiredPose.orientation.z;
-  // target_rotation.coeffRef(3, 0) = req.desiredPose.orientation.w;
-
-  // Eigen::MatrixXd err = robotis_->calcVWerr(target_position, curr_position, target_rotation, curr_orientation);
-
-  // // returh the values
-  // jointPose.value = err(0,0);
-  // res.targJointPose.push_back(jointPose);
-  // jointPose.value = err(1,0);
-  // res.targJointPose.push_back(jointPose);
-  // jointPose.value = err(2,0);
-  // res.targJointPose.push_back(jointPose);
-  // jointPose.value = err(3,0);
-  // res.targJointPose.push_back(jointPose);
-  // jointPose.value = err(4,0);
-  // res.targJointPose.push_back(jointPose);
-  // jointPose.value = err(5,0);
-  // res.targJointPose.push_back(jointPose);
-
   thormang3_manipulation_module_msgs::JointPose jointPose;
 
-  jointPose.value = 0;
+
+  
+  // calc werr
+
+  Eigen::MatrixXd curr_position = robotis_->thormang3_link_data_[34]->position_;
+  Eigen::MatrixXd curr_orientation = robotis_->thormang3_link_data_[34]->orientation_;
+
+  //OS_INFO("Creating desired position.");
+  Eigen::MatrixXd target_position  = Eigen::MatrixXd::Zero(3,1);
+  target_position.coeffRef(0, 0) = req.desiredPose.position.x;
+  target_position.coeffRef(1, 0) = req.desiredPose.position.y;
+  target_position.coeffRef(2, 0) = req.desiredPose.position.z;
+
+  //ROS_INFO("Creating desired orientation.");
+  Eigen::MatrixXd target_rotation  = Eigen::MatrixXd::Zero(4,1);
+  target_rotation.coeffRef(0, 0) = req.desiredPose.orientation.x;
+  target_rotation.coeffRef(1, 0) = req.desiredPose.orientation.y;
+  target_rotation.coeffRef(2, 0) = req.desiredPose.orientation.z;
+  target_rotation.coeffRef(3, 0) = req.desiredPose.orientation.w;
+
+  Eigen::MatrixXd err = robotis_->calcVWerr(target_position, curr_position, target_rotation, curr_orientation);
+
+  // returh the values
+  jointPose.value = err(0,0);
   res.targJointPose.push_back(jointPose);
-  jointPose.value = 0;
+  jointPose.value = err(1,0);
   res.targJointPose.push_back(jointPose);
-  jointPose.value = 0;
+  jointPose.value = err(2,0);
   res.targJointPose.push_back(jointPose);
-  jointPose.value = 0;
+  jointPose.value = err(3,0);
   res.targJointPose.push_back(jointPose);
-  jointPose.value = 0;
+  jointPose.value = err(4,0);
   res.targJointPose.push_back(jointPose);
-  jointPose.value = 0;
+  jointPose.value = err(5,0);
   res.targJointPose.push_back(jointPose);
+
+  
+
+  // jointPose.value = 0;
+  // res.targJointPose.push_back(jointPose);
+  // jointPose.value = 0;
+  // res.targJointPose.push_back(jointPose);
+  // jointPose.value = 0;
+  // res.targJointPose.push_back(jointPose);
+  // jointPose.value = 0;
+  // res.targJointPose.push_back(jointPose);
+  // jointPose.value = 0;
+  // res.targJointPose.push_back(jointPose);
+  // jointPose.value = 0;
+  // res.targJointPose.push_back(jointPose);
 
 
 
