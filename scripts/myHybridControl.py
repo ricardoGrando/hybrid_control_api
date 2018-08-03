@@ -39,7 +39,6 @@ pubList =  [    '/thormang3/l_arm_sh_p1_position/command', # -1.6 to 1.6
 # Number of states to change a piece between two towers
 TOTAL_STATES = 9
 
-
 # Cartesian position of x. It is fixed. Only y and z changes
 x = 0.535
 # Minimum position distance between the actual and the goal to change the state
@@ -47,13 +46,13 @@ ARRIVED_POS_THRESHOLD = 0.0005
 # Minimum orientation distance for W of a orientation x, y, z towards the goal. 
 ARRIVED_ORI_THRESHOLD = 0.0005
 # Threshold to go with net or jacobian. If cartesian position distance towards the goal is small then it goes with jacobian 
-NETORJACOBIAN_THRESHOLD = 0.05
+NETORJACOBIAN_THRESHOLD = 0.015
 # Max step that the net goes towards the goal. THE MAX TRAINED STEP WAS 0.1
-MAX_STEP_NET = 0.05
+MAX_STEP_NET = 0.03
 # Max step that jacobian does towards the goal. THE SMALLER THE SLOWER BUT WITH BEST ACCURACY
 MAX_STEP_JACOBIAN = 0.01
 # Height in Z for each of the four pieces in the tower. The last value in the upper tower value
-heightTowerList = [0.080, 0.115, 0.145, 0.175, 0.21]
+heightTowerList = [0.080, 0.115, 0.145, 0.175, 0.23]
 # Lenght in Y for the three towers.
 lengthTowerList = [0.15, 0.3, 0.45]
 # Number of time to publish the same thing in order to wait the gripper to close  
@@ -161,7 +160,8 @@ class hybridControl(object):
 
         self.thormangPublishers.runOnThormang(self.angles, self.mutex, self.linkThreads, 0, PUB_TIMES)
 
-        self.model = load_model("/home/ricardo/catkin_ws/src/hybrid_control_api/scripts/model__10_2048_Adam_sigmoid_150_120_90_75_65_55_7_10000000_0.015973498610026306_0.01608150556329224_0.0009890548353295382.h5")
+        #arruma essa porra
+        self.model = load_model("/home/ricardo/catkin_ws/src/hybrid_control_api/scripts/model__340_2048_Adam_sigmoid_150_120_90_75_65_55_7_10000000_0.013154525557590856_0.01312057321594821_0.0007109376021267358.h5")
 
         # full
         self.highestList = np.array([   0.0996578,  0.09700995, 0.09993384, 0.33062578, 0.28312842, 0.31182562,\
@@ -273,7 +273,7 @@ class hybridControl(object):
                 print("Norm pos: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3])))
                 print("Norm ori: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector)[3:])))
 
-                print(self.realEndEffector)
+                #print(self.realEndEffector)
 
             # Usa o Jacobiano
             else:
@@ -288,17 +288,17 @@ class hybridControl(object):
                 self.angles += call_ik_service(self.currJointPose, self.desiredPosition[0:3], self.desiredPosition[3:7], self.delta)
 
                 # Send to the topic when it gets close
-                if np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3])/ARRIVED_POS_THRESHOLD < 1.1 and ((self.desiredPosition-self.realEndEffector)[-1])/ARRIVED_ORI_THRESHOLD < 1.1:
-                    self.thormangPublishers.runOnThormang(self.angles, self.mutex, self.linkThreads, self.gripper, PUB_TIMES)
-                    self.publisherCounter = 0
-                    print("Jacobian")
-                    print("Norm total: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector))))
-                    print("Norm pos: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3])))
-                    print("Norm ori: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector)[3:])))
+                #if np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3])/ARRIVED_POS_THRESHOLD < 1.5 and ((self.desiredPosition-self.realEndEffector)[-1])/ARRIVED_ORI_THRESHOLD < 1.5:
+                self.thormangPublishers.runOnThormang(self.angles, self.mutex, self.linkThreads, self.gripper, PUB_TIMES)
+                self.publisherCounter = 0
+                print("Jacobian")
+                print("Norm total: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector))))
+                print("Norm pos: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3])))
+                print("Norm ori: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector)[3:])))
 
-                    print(self.realEndEffector)
-                else:
-                    self.publisherCounter += 1           
+                    #print(self.realEndEffector)
+                # else:
+                #     self.publisherCounter += 1           
                 
                 #time.sleep(1)
 
