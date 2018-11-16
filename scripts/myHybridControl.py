@@ -34,8 +34,7 @@ pubList =  [    '/thormang3/l_arm_sh_p1_position/command', # -1.6 to 1.6
                 '/thormang3/l_arm_wr_y_position/command', # 1.4 to 1.4
                 '/thormang3/l_arm_wr_p_position/command', # -1.4 to 1.4
                 '/thormang3/l_arm_grip_position/command', # -1.4 to 1.4
-                '/thormang3/l_arm_grip_1_position/command' # -1.4 to 1.4
-                
+                '/thormang3/l_arm_grip_1_position/command' # -1.4 to 1.4                
             ]
 
 # Number of states to change a piece between two towers
@@ -133,7 +132,7 @@ class hybridControl(object):
         np.set_printoptions(suppress=True) 
     
         # The initial position of the angles and its end effector cartesian position
-        self.endEffectorInitialPosition = np.array([ 0.535, 0.3, 0.121, 1.0, 0.0, 0.0, 0.0 ])
+        self.endEffectorInitialPosition = np.array([ 0.435, 0.15, 0.2, 1.0, 0.0, 0.0, 0.0 ])
         self.angles = np.array([-1.270851663074207,0.7706552679983241,1.1857071812176423,0.690658380033005,1.076204383634198,-1.2691182991333085,-1.0401750075045482])
         
         # The current joint pose is the initial pose
@@ -151,7 +150,9 @@ class hybridControl(object):
         
         # Call ros service to define the end-effector
         call_ik_service(self.currJointPose, self.endEffectorInitialPosition[0:3], self.endEffectorInitialPosition[3:7], np.zeros(shape=(7,)))
+        #print(endEffectorPosition)
 
+        #time.sleep(100)
         # Creates the thread for publishing in each joint
         for i in range(0, len(pubList)):
             self.linkThreads.append(topicCartesianState(pubList[i], self.mutex, False))
@@ -180,7 +181,7 @@ class hybridControl(object):
         # The first real position is the initial position
         self.realEndEffector = self.endEffectorInitialPosition
         # First desired position
-        self.desiredPosition = np.array([ 0.535, 0.3, 0.16, 1.0, 0.0, 0.0, 0.0 ])
+        self.desiredPosition = np.array([ x, lengthTowerList[0], heightTowerList[-1], 1.0, 0.0, 0.0, 0.0 ])
         # Vector of the distance between the desired and the real position
         self.delta = self.desiredPosition-self.endEffectorInitialPosition
         # Gripper closing value to be set in its joint
