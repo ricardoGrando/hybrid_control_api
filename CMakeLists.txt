@@ -19,6 +19,7 @@ find_package(catkin REQUIRED COMPONENTS
   thormang3_kinematics_dynamics
   thormang3_manipulation_module_msgs
   message_generation
+  sensor_msgs
 )
 
 # Copied this from manipulation module

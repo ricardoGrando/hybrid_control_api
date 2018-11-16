@@ -13,6 +13,8 @@ from runOnThormang import *
 from utils import *
 from tf.transformations import *
 
+from sensor_msgs.msg import JointState
+
 # cartesian position of the end effector
 endEffectorPosition = (    ['end_arm_position_x', 0.0],   
                             ['end_arm_position_y', 0.0],   
@@ -78,7 +80,7 @@ def create_msg(currJointPose, targetPosition, targetOrientation):
     
     return cjp, dp
 
-# service to call the jacobian/forward package
+# Service to call the jacobian/forward package
 def call_ik_service(currJointPose, targetPosition, targetOrientation, deltaEnd):
     rospy.init_node('hybridControl', anonymous=True)
     rospy.wait_for_service('hybrid_control_api/hybrid')
@@ -86,13 +88,14 @@ def call_ik_service(currJointPose, targetPosition, targetOrientation, deltaEnd):
     calc_ik_function = rospy.ServiceProxy('hybrid_control_api/hybrid', hybrid)
     res = calc_ik_function(cjp,dp)
     
-    # brush the response
+    # Brush the response
     j = 0
     k = 0
     jacobian = np.zeros(shape=(6,7))
     err = np.zeros(shape=(6,1))
-
+    
     for i in range(0, len(res.targJointPose)):
+        # Gets the jacobian matrix from the server. It is pushed back as a jointPose. It needs to be improved, but is working
         if i >= len(endEffectorPosition)+err.shape[0]:  
             jacobian[k][j] = res.targJointPose[i].value
             j += 1
@@ -102,11 +105,12 @@ def call_ik_service(currJointPose, targetPosition, targetOrientation, deltaEnd):
             
             if k == jacobian.shape[0]:
                 break
-                
-            #print jacobianTemp
+         
         elif i < err.shape[0]: 
+            # Gets the err vector from the server. It is pushed back as a jointPose. It needs to be improved, but is working
             err[i][0] = res.targJointPose[i].value
         else: 
+            # Gets the position and orientation of the end-effector
             endEffectorPosition[i-err.shape[0]][1] = res.targJointPose[i].value 
     # Makes the jacobian inverse
     jacobianTrans = np.dot(jacobian, np.matrix.transpose(jacobian))
@@ -119,20 +123,20 @@ def call_ik_service(currJointPose, targetPosition, targetOrientation, deltaEnd):
     deltaEndEuler[4] = yEuler
     deltaEndEuler[5] = zEuler
 
+    # Defines the delta angles
     deltaAngles = np.dot(inverseJacobian, deltaEndEuler)
        
     return deltaAngles  
-
 
 class hybridControl(object):
     def __init__(self):
         np.set_printoptions(suppress=True) 
     
-        # The initial position of the angles and its end effector 
+        # The initial position of the angles and its end effector cartesian position
         self.endEffectorInitialPosition = np.array([ 0.535, 0.3, 0.121, 1.0, 0.0, 0.0, 0.0 ])
         self.angles = np.array([-1.270851663074207,0.7706552679983241,1.1857071812176423,0.690658380033005,1.076204383634198,-1.2691182991333085,-1.0401750075045482])
         
-        # The current joint pose to pass to the rospackage
+        # The current joint pose is the initial pose
         self.currJointPose = [  ('l_arm_sh_p1', self.angles[0]),\
                                 ('l_arm_sh_r', self.angles[1]),\
                                 ('l_arm_sh_p2', self.angles[2]),\
@@ -141,29 +145,28 @@ class hybridControl(object):
                                 ('l_arm_wr_y', self.angles[5]),\
                                 ('l_arm_wr_p', self.angles[6])
                             ]
-        # Threads and the mutex to control them with the main
+        # List of threads and the mutex to control the threads with the runOnThormang class
         self.linkThreads = []
         self.mutex = threading.Condition()        
         
-        # Call ros service
+        # Call ros service to define the end-effector
         call_ik_service(self.currJointPose, self.endEffectorInitialPosition[0:3], self.endEffectorInitialPosition[3:7], np.zeros(shape=(7,)))
 
-        # Creates the thread for each 
+        # Creates the thread for publishing in each joint
         for i in range(0, len(pubList)):
             self.linkThreads.append(topicCartesianState(pubList[i], self.mutex, False))
-                
+
+        # Start them   
         for i in range(0, len(pubList)):
-	    self.linkThreads[i].daemon = True
+	        #self.linkThreads[i].daemon = True
             self.linkThreads[i].start()
 
         self.thormangPublishers = runOnThormang()
-
-        self.thormangPublishers.runOnThormang(self.angles, self.mutex, self.linkThreads, 0, PUB_TIMES)
-
-        #arruma essa porra
+        
+        # Load the model
         self.model = load_model("/home/ricardo/catkin_ws/src/hybrid_control_api/scripts/model__340_2048_Adam_sigmoid_150_120_90_75_65_55_7_10000000_0.013154525557590856_0.01312057321594821_0.0007109376021267358.h5")
 
-        # full
+        # Its limits for normalization/desnormalization
         self.highestList = np.array([   0.0996578,  0.09700995, 0.09993384, 0.33062578, 0.28312842, 0.31182562,\
                                         0.27920513, 1.59999821, 1.59999794, 1.59999969, 1.29999984, 2.79999662,\
                                         1.3999988 , 1.3999999 , 0.08726649, 0.08726648, 0.0872665,  0.0872665,\
@@ -174,33 +177,37 @@ class hybridControl(object):
                                         -1.39999721, -1.39999988, -0.08726647, -0.08726649, -0.0872665,  -0.08726644,\
                                         -0.08726649, -0.08726646, -0.08726647])
 
+        # The first real position is the initial position
         self.realEndEffector = self.endEffectorInitialPosition
-
+        # First desired position
         self.desiredPosition = np.array([ 0.535, 0.3, 0.16, 1.0, 0.0, 0.0, 0.0 ])
-
+        # Vector of the distance between the desired and the real position
         self.delta = self.desiredPosition-self.endEffectorInitialPosition
-
+        # Gripper closing value to be set in its joint
         self.gripper = 0
-
+        # The pieces position in the hanoi game(Piece 4, 3, 2, 1. 4 is the biggest)
         self.towers = [[4, 3, 2, 1], [], []]
-
+        # State of the arm movement to move the piece from a place A to a place B
         self.movementState = 0
-
+        # Flag to set that the movement is completed
         self.concluded = False
 
+        # Save the angles through the process
         csvfile = open("angles.csv", 'wb')
         self.csvwriter = csv.writer(csvfile)
 
-        # setar no init
+        # The state of the Game. It changes when a movement is finished
         self.gameState = 0
 
-        self.publisherCounter = 0
-
+        # Runs for the first time to put the arm at the desired initial position. It is runned 10 times because of the delay
         for i in range(0, 10):
             self.thormangPublishers.runOnThormang(self.angles, self.mutex, self.linkThreads, self.gripper, PUB_TIMES)  
 
+    # This function limits the vector between the actual position of the end effector and the desired position
+    # The delta(vector) is devided by two until the biggest value of the vector gets smaller than a MAX_STEP
+    # Is done by getting the biggest value of the vector because the end-effector orientation is fixed and it only moves in a unique dimension at once
+    # It is applied for the jacobian and for the ANN 
     def limitVector(self):
-        #TO DO
         self.delta = (self.desiredPosition-self.realEndEffector)
 
         if np.max(abs(self.delta)) < NETORJACOBIAN_THRESHOLD:
@@ -215,16 +222,17 @@ class hybridControl(object):
                     self.delta = self.delta/2                
                 else:
                     break
-
+    # Moves the arm using Jacobian or ANN, depending on the arriving threshold. For position is used the norm and for orientation is the w distance
     def moveArm(self):
 
-        # set the new delta
+        # Gets the end-effector delta
         self.limitVector()
 
-        # verify the distance towards the desired
-        if np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3]) > ARRIVED_POS_THRESHOLD or ((self.desiredPosition-self.realEndEffector)[-1]) > ARRIVED_ORI_THRESHOLD: # or (self.movementState == 2)  or (self.movementState == 5):
-            #"Usa a rede"
+        # Verify the distance towards the desired position and orientation
+        if np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3]) > ARRIVED_POS_THRESHOLD or ((self.desiredPosition-self.realEndEffector)[-1]) > ARRIVED_ORI_THRESHOLD:
+            # uses the ANN
             if np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3]) > NETORJACOBIAN_THRESHOLD:
+                # Set the input of the ANN to be predicted(delta end and angles)
                 predictArray = np.array([   self.delta[0],
                                         self.delta[1],
                                         self.delta[2],
@@ -240,19 +248,29 @@ class hybridControl(object):
                                         self.angles[5],
                                         self.angles[6]                                
                                         ])
-                # normalize the predict array
+                # Normalize the predict array
                 predictArray = normalizeArray(predictArray, self.highestList[:14], self.lowestList[:14])
-                # the net output
+                # The ANN output
                 deltaAnglesPredicted = (np.array(self.model.predict(predictArray.reshape(1,14)))[0])  
-            
-                # desnormalize the predicted angles
+                # Desnormalize the predicted angles
                 deltaAnglesPredicted = desnormalizeArray(deltaAnglesPredicted, self.highestList[14:], self.lowestList[14:])
-                print("Net")
-                # the new angle plus the delta angles
+                # The angle plus the delta angles
                 self.angles += deltaAnglesPredicted.reshape(1,7)[0] 
-
+                # Runs on thormang
                 self.thormangPublishers.runOnThormang(self.angles, self.mutex, self.linkThreads, self.gripper, PUB_TIMES)           
+                
+                # Publishes on the /robotis/set_joint_states too
+                jointStateValue = JointState()
+                jointStateValue.name = ['l_arm_sh_p1', 'l_arm_sh_r', 'l_arm_sh_p2', 'l_arm_el_y', 'l_arm_wr_r', 'l_arm_wr_y', 'l_arm_wr_p']
+                jointStateValue.position = [self.angles[0], self.angles[1], self.angles[2], self.angles[3], self.angles[4], self.angles[5], self.angles[6]]
+                #print(jointStateValue)
+                jointStatePublisher = rospy.Publisher("/robotis/set_joint_states", JointState, queue_size=10)
+                jointStatePublisher.publish(jointStateValue)
 
+                # Saves the angles
+                self.csvwriter.writerow(self.angles.tolist())
+
+                # Sets the current pose of the arm
                 self.currJointPose = [  ('l_arm_sh_p1', self.angles[0]),\
                                 ('l_arm_sh_r', self.angles[1]),\
                                 ('l_arm_sh_p2', self.angles[2]),\
@@ -261,22 +279,24 @@ class hybridControl(object):
                                 ('l_arm_wr_y', self.angles[5]),\
                                 ('l_arm_wr_p', self.angles[6])
                             ]
-
+                # And calls the server to define the end-effector
                 call_ik_service(self.currJointPose, self.desiredPosition[0:3], self.desiredPosition[3:7], np.zeros(shape=(7,)))
-
+                # The new realEndEffector is then set
                 self.realEndEffector = np.array([endEffectorPosition[0:][0][1], endEffectorPosition[1:][0][1], \
                                                     endEffectorPosition[2:][0][1], endEffectorPosition[3:][0][1], \
                                                     endEffectorPosition[4:][0][1], endEffectorPosition[5:][0][1], \
                                                     endEffectorPosition[6:][0][1]])
 
+                print("Net")
                 print("Norm total: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector))))
                 print("Norm pos: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3])))
                 print("Norm ori: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector)[3:])))
 
-                #print(self.realEndEffector)
+                print(self.realEndEffector)
 
-            # Usa o Jacobiano
+            # Uses the Jacobian
             else:
+                # Defines the pose of the arm
                 self.currJointPose = [  ('l_arm_sh_p1', self.angles[0]),\
                                 ('l_arm_sh_r', self.angles[1]),\
                                 ('l_arm_sh_p2', self.angles[2]),\
@@ -285,25 +305,29 @@ class hybridControl(object):
                                 ('l_arm_wr_y', self.angles[5]),\
                                 ('l_arm_wr_p', self.angles[6])
                             ]
+                # Calls the service to calc the Jacobian Matrix based on the current pose. The matrix is inverted and dotted with the delta, setting the new angle increment
                 self.angles += call_ik_service(self.currJointPose, self.desiredPosition[0:3], self.desiredPosition[3:7], self.delta)
 
                 # Send to the topic when it gets close
-                #if np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3])/ARRIVED_POS_THRESHOLD < 1.5 and ((self.desiredPosition-self.realEndEffector)[-1])/ARRIVED_ORI_THRESHOLD < 1.5:
                 self.thormangPublishers.runOnThormang(self.angles, self.mutex, self.linkThreads, self.gripper, PUB_TIMES)
-                self.publisherCounter = 0
+                
+                # Publishes on the /robotis/set_joint_states too
+                jointStateValue = JointState()
+                jointStateValue.name = ['l_arm_sh_p1', 'l_arm_sh_r', 'l_arm_sh_p2', 'l_arm_el_y', 'l_arm_wr_r', 'l_arm_wr_y', 'l_arm_wr_p']
+                jointStateValue.position = [self.angles[0], self.angles[1], self.angles[2], self.angles[3], self.angles[4], self.angles[5], self.angles[6]]
+                #print(jointStateValue)
+                jointStatePublisher = rospy.Publisher("/robotis/set_joint_states", JointState, queue_size=10)
+                jointStatePublisher.publish(jointStateValue)
+
                 print("Jacobian")
                 print("Norm total: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector))))
                 print("Norm pos: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector)[0:3])))
                 print("Norm ori: "+str(np.linalg.norm((self.desiredPosition-self.realEndEffector)[3:])))
-
-                    #print(self.realEndEffector)
-                # else:
-                #     self.publisherCounter += 1           
                 
-                #time.sleep(1)
-
+                # Saves the angles
                 self.csvwriter.writerow(self.angles.tolist())
 
+                # Defines the current joint pose again
                 self.currJointPose = [  ('l_arm_sh_p1', self.angles[0]),\
                                 ('l_arm_sh_r', self.angles[1]),\
                                 ('l_arm_sh_p2', self.angles[2]),\
@@ -313,45 +337,46 @@ class hybridControl(object):
                                 ('l_arm_wr_p', self.angles[6])
                             ]
                 
+                # And calls the service once again
                 call_ik_service(self.currJointPose, self.desiredPosition[0:3], self.desiredPosition[3:7], self.delta)
 
+                # To define the new real end effector position
                 self.realEndEffector = np.array([endEffectorPosition[0:][0][1], endEffectorPosition[1:][0][1], \
                                                     endEffectorPosition[2:][0][1], endEffectorPosition[3:][0][1], \
                                                     endEffectorPosition[4:][0][1], endEffectorPosition[5:][0][1], \
                                                     endEffectorPosition[6:][0][1]])
-
-
-                
+               
         else:
+            # Movement concluded
             if (self.movementState != 2 and self.movementState != 6 and self.movementState != 7):  
                 if self.movementState == TOTAL_STATES-1:
                     self.movementState = 0
                     self.concluded = True                
                 else:     
                     self.movementState += 1
-                
+            # Or publish on thormang
             else:
                 self.thormangPublishers.runOnThormang(self.angles, self.mutex, self.linkThreads, self.gripper, PUB_TIMES)           
 
+            #print("State of the Movement:" + str(self.movementState))
 
-        #print("Move State:" + str(self.movementState))
-
+    # Sets a new target catesian position
     def setTarget(self, target):
 
         self.desiredPosition = target
         self.delta = (self.desiredPosition-self.realEndEffector)
 
-    def moveBlock(self, fromTower, toTower):
-        
+    # Machine State to move a block from a tower A to B
+    def moveBlock(self, fromTower, toTower):   
         if self.movementState == 0:
-            # go to above of the disered tower to take the block
+            # Go above of the desired tower to take the block
             y = lengthTowerList[fromTower]        
             z = heightTowerList[4]
 
             self.setTarget(np.array([ x, y, z, 1.0, 0.0, 0.0, 0.0 ]))
 
         elif self.movementState == 1:
-            # go down to grab the block
+            # Go down to grab the block
             y = lengthTowerList[fromTower]  
 
             z = heightTowerList[len(self.towers[fromTower])-1]
@@ -375,7 +400,7 @@ class hybridControl(object):
 
                 self.setTarget(np.array([ x, y, z, 1.0, 0.0, 0.0, 0.0 ])) 
         elif self.movementState == 3:
-            # go up
+            # Go up
             y = lengthTowerList[fromTower]        
             z = heightTowerList[4]            
 
@@ -383,14 +408,14 @@ class hybridControl(object):
 
 
         elif self.movementState == 4:
-            # go to above of the tower we want to place the block
+            # Go to above of the tower we want to place the block
             y = lengthTowerList[toTower]        
             z = heightTowerList[4]
 
             self.setTarget(np.array([ x, y, z, 1.0, 0.0, 0.0, 0.0 ]))
 
         elif self.movementState == 5:
-            # go down
+            # Go down
             y = lengthTowerList[toTower]  
 
             z = heightTowerList[len(self.towers[toTower])]
@@ -399,7 +424,7 @@ class hybridControl(object):
             self.waitForGripper = 0
 
         elif self.movementState == 6:
-            # release the block and wait            
+            # Release the block and wait            
 
             if self.waitForGripper <= GRIPPER_WAIT_MAX_TIME:
                 self.waitForGripper += 1
@@ -412,6 +437,7 @@ class hybridControl(object):
                 self.waitForGripper = 0
 
         elif self.movementState == 7:
+            # Wait and set to go up
             if self.waitForGripper <= GRIPPER_WAIT_MAX_TIME:
                 self.waitForGripper += 1
             else:
@@ -424,17 +450,19 @@ class hybridControl(object):
                 self.setTarget(np.array([ x, y, z, 1.0, 0.0, 0.0, 0.0 ]))
 
         elif self.movementState == TOTAL_STATES-1:
-            # go up
+            # Go up
             y = lengthTowerList[toTower]        
             z = heightTowerList[4]
 
             self.setTarget(np.array([ x, y, z, 1.0, 0.0, 0.0, 0.0 ]))
               
+    # Execute the movement
     def executeMovement(self, fromTower, toTower):
         self.moveBlock(fromTower, toTower)
 
         self.moveArm()
 
+    # Hanoi Tower Game's algorithm for pair number of blocks
     def run(self):
         while not self.isSolved():
             if self.gameState == 0:
@@ -454,6 +482,7 @@ class hybridControl(object):
                 self.concluded = False
                 print(self.towers)
 
+    # Decide from which tower and to what tower the movement must be executed
     def decideFromTo(self, one, other):
         if len(self.towers[one]) == 0:
             # self.towers[one].append(self.towers[other].pop())
@@ -471,7 +500,7 @@ class hybridControl(object):
             # self.towers[one].append(self.towers[other].pop())
             return other, one
 
-
+    # verify if the game is finally solved
     def isSolved(self):
         if len(self.towers[0]) == 0 and len(self.towers[1]) == 0 and len(self.towers[2]) == 4:
             return True

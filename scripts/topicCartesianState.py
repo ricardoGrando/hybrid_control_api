@@ -1,18 +1,18 @@
 import sys
 import rospy
 import roslib
-from std_msgs.msg import String
+# from std_msgs.msg import String
 import threading
-from gazebo_msgs.srv import GetLinkState 
-from gazebo_msgs.srv import GetModelState
-from gazebo_msgs.srv import SetLinkState 
-from gazebo_msgs.srv import SetModelState
-from gazebo_msgs.msg import LinkState # For getting information about link states
-import time
+# from gazebo_msgs.srv import GetLinkState 
+# from gazebo_msgs.srv import GetModelState
+# from gazebo_msgs.srv import SetLinkState 
+# from gazebo_msgs.srv import SetModelState
+# from gazebo_msgs.msg import LinkState # For getting information about link states
+# import time
 from std_msgs.msg import Float64
 
 """
-    Description:    Gets position e orientation of a specified link 
+    Description:    Thread that publishes a Float64 in a topic, when allowed by the main thread.
 """
 
 class topicCartesianState(threading.Thread):
@@ -27,11 +27,13 @@ class topicCartesianState(threading.Thread):
         self.pub = rospy.Publisher(self.publisher, Float64, queue_size=10)
        
         self.value = 0
-       
+    
+    # Main thread sets the value that the thread must publish in the topic
     def setValue(self, value):
         self.value = Float64(value)
         #print (self.value)
 
+    # The main thread sets if the thread can publish or not
     def setFlag(self):
         self.flag = True
 
