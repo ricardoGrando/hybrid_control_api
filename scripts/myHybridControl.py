@@ -12,6 +12,7 @@ import csv
 from runOnThormang import *
 from utils import *
 from tf.transformations import *
+import getpass
 
 from sensor_msgs.msg import JointState
 
@@ -165,7 +166,7 @@ class hybridControl(object):
         self.thormangPublishers = runOnThormang()
         
         # Load the model
-        self.model = load_model("/home/ricardo/catkin_ws/src/hybrid_control_api/scripts/model__340_2048_Adam_sigmoid_150_120_90_75_65_55_7_10000000_0.013154525557590856_0.01312057321594821_0.0007109376021267358.h5")
+        self.model = load_model("/home/"+getpass.getuser()+"/catkin_ws/src/hybrid_control_api/scripts/model__340_2048_Adam_sigmoid_150_120_90_75_65_55_7_10000000_0.013154525557590856_0.01312057321594821_0.0007109376021267358.h5")
 
         # Its limits for normalization/desnormalization
         self.highestList = np.array([   0.0996578,  0.09700995, 0.09993384, 0.33062578, 0.28312842, 0.31182562,\
