@@ -206,24 +206,28 @@ class hybridControl(object):
             self.thormangPublishers.runOnThormang(self.angles, self.mutex, self.linkThreads, self.gripper, PUB_TIMES)  
 
     # This function limits the vector between the actual position of the end effector and the desired position
-    # The delta(vector) is devided by two until the biggest value of the vector gets smaller than a MAX_STEP
+    # The delta(vector) is divided by two until the biggest value of the vector gets smaller than a MAX_STEP
     # Is done by getting the biggest value of the vector because the end-effector orientation is fixed and it only moves in a unique dimension at once
     # It is applied for the jacobian and for the ANN 
     def limitVector(self):
         self.delta = (self.desiredPosition-self.realEndEffector)
 
         if np.max(abs(self.delta)) < NETORJACOBIAN_THRESHOLD:
-            while True:
-                if np.max(abs(self.delta)) > MAX_STEP_JACOBIAN:
-                    self.delta = self.delta/2                
-                else:
-                    break
+            if np.max(abs(self.delta)) > MAX_STEP_JACOBIAN:
+                self.delta = MAX_STEP_JACOBIAN * self.delta / (np.max(abs(self.delta)))
+            # while True:
+            #     if np.max(abs(self.delta)) > MAX_STEP_JACOBIAN:
+            #         self.delta = self.delta/2                
+            #     else:
+            #         break
         else:
-            while True:            
-                if np.max(abs(self.delta)) > MAX_STEP_NET:
-                    self.delta = self.delta/2                
-                else:
-                    break
+            if np.max(abs(self.delta)) > MAX_STEP_NET:
+                self.delta = MAX_STEP_NET * self.delta / (np.max(abs(self.delta)))
+            # while True:            
+            #     if np.max(abs(self.delta)) > MAX_STEP_NET:
+            #         self.delta = self.delta/2                
+            #     else:
+            #         break
     # Moves the arm using Jacobian or ANN, depending on the arriving threshold. For position is used the norm and for orientation is the w distance
     def moveArm(self):
 
