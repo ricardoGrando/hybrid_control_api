@@ -82,7 +82,7 @@ def call_ik_service(currJointPose, targetPosition, targetOrientation, deltaEnd):
     inverseJacobian = np.dot(np.matrix.transpose(jacobian), np.linalg.inv(jacobianTrans))
 
     # Convert the quartenion desired to euler angles
-    xEuler, yEuler, zEuler = quaternion_to_euler_angle(deltaEnd[3], deltaEnd[4], deltaEnd[5], deltaEnd[6])
+    xEuler, yEuler, zEuler = quaternion_to_euler_angle(deltaEnd[4], deltaEnd[5], deltaEnd[6], deltaEnd[3])
     deltaEndEuler = deltaEnd[:-1]   
     deltaEndEuler[3] = xEuler
     deltaEndEuler[4] = yEuler
@@ -135,13 +135,13 @@ def limitVector(desiredPosition, realEndEffector, NETORJACOBIAN_POS_THRESHOLD, M
     if np.linalg.norm((desiredPosition-realEndEffector)[0:3]) < NETORJACOBIAN_POS_THRESHOLD:
         while True:
             if np.max(abs(delta)) > MAX_STEP_JACOBIAN:
-                delta = delta - delta/100                
+                delta = delta - delta/100               
             else:
                 break
     else:
         while True:            
             if np.max(abs(delta)) > MAX_STEP_NET:
-                delta = delta - delta/100                 
+                delta = delta - delta/100             
             else:
                 break
 
@@ -153,11 +153,11 @@ if __name__ == '__main__':
            
     step = 0.0001
     stepSize = 0.0001
-    maxStep = 0.1
-    radiusArrived = stepSize*10
+    maxStep = 0.05
+    radiusArrived = 0.005
     maxDistance = 0.09
 
-    maxCount = 10000
+    maxCount = 1000
     
     endEffector = np.zeros(shape=(7,7))
     endEffector[0] = np.array([ 0.43, 0.462, 0.121, 1.0, 0.0, 0.0, 0.0 ])
@@ -170,8 +170,8 @@ if __name__ == '__main__':
 
     MODE = "Jacobian"
 
-    NETORJACOBIAN_POS_THRESHOLD = 100
-    MAX_STEP_NET = 0.03
+    NETORJACOBIAN_POS_THRESHOLD = 100000
+    MAX_STEP_NET = 10
 
     model = load_model("/home/ricardo/catkin_ws/src/hybrid_control_api/scripts/model__340_2048_Adam_sigmoid_150_120_90_75_65_55_7_10000000_0.013154525557590856_0.01312057321594821_0.0007109376021267358.h5")
 
@@ -215,6 +215,7 @@ if __name__ == '__main__':
         while True:
             if np.linalg.norm((endEffector[i]-realEndEffector)[0:3]) < NETORJACOBIAN_POS_THRESHOLD:
                 angles += call_ik_service(currJointPose, np.zeros(shape=(3)), np.zeros(shape=(4)), delta)
+                
             else:
                 predictArray = np.array([   delta[0],
                                         delta[1],
@@ -238,9 +239,12 @@ if __name__ == '__main__':
             
                 # desnormalize the predicted angles
                 deltaAnglesPredicted = desnormalizeArray(deltaAnglesPredicted, highestList[14:], lowestList[14:])
-                print("Net")
+                #print("Net")
                 # the new angle plus the delta angles
                 angles += deltaAnglesPredicted.reshape(1,7)[0] 
+
+            lastDelta = delta
+            lastRealEndEffector = realEndEffector
 
             # The current joint pose to pass to the rospackage
             currJointPose = [  ('l_arm_sh_p1', angles[0]),\
@@ -254,44 +258,50 @@ if __name__ == '__main__':
 
             call_ik_service(currJointPose, np.zeros(shape=(3)), np.zeros(shape=(4)), delta)
 
-            print ("P: "+str(endEffectorPosition[0:][0][1])+", "+str(endEffectorPosition[1:][0][1])+", "\
-                            +str(endEffectorPosition[2:][0][1])+", "+str(endEffectorPosition[3:][0][1])+", "\
-                            +str(endEffectorPosition[4:][0][1])+", "+str(endEffectorPosition[5:][0][1])+", "\
-                            +str(endEffectorPosition[6:][0][1])   )
+            #print ("P: "+str(endEffectorPosition[0:][0][1])+", "+str(endEffectorPosition[1:][0][1])+", "\
+            #                +str(endEffectorPosition[2:][0][1])+", "+str(endEffectorPosition[3:][0][1])+", "\
+            #                +str(endEffectorPosition[4:][0][1])+", "+str(endEffectorPosition[5:][0][1])+", "\
+            #                +str(endEffectorPosition[6:][0][1])   )
                 
-            print ("Plinha: "+str(endEffector[i]))
+            #print ("Plinha: "+str(endEffector[i]))
 
             realEndEffector = np.array([endEffectorPosition[0:][0][1], endEffectorPosition[1:][0][1], \
                                             endEffectorPosition[2:][0][1], endEffectorPosition[3:][0][1], \
                                             endEffectorPosition[4:][0][1], endEffectorPosition[5:][0][1], \
                                             endEffectorPosition[6:][0][1]])
             
-            print("Error: "+str(np.linalg.norm((endEffector[i]-realEndEffector)[0:3])))
+            #print("Error: "+str(np.linalg.norm((endEffector[i]-realEndEffector)[0:3])))
 
             #print(delta)
                         
             #raw_input()
 
             if np.linalg.norm((endEffector[i]-realEndEffector)[0:3]) < radiusArrived:
-                print("Arrived")
+                #print("Arrived")
+
+                endEffector[i][:3] = realEndEffector[:3]
+
                 i += 1
                 k = 0                                
 
                 if i == endEffector.shape[0]:
                     #raw_input()
                     break
-                else:
-                    idealDelta = limitVector(endEffector[i], endEffector[i-1], NETORJACOBIAN_POS_THRESHOLD, step, step) 
+                #else:
+                    #idealDelta = limitVector(endEffector[i], endEffector[i-1], NETORJACOBIAN_POS_THRESHOLD, step, step) 
+                    #k = 1
+                    
 
             delta = limitVector(endEffector[i], realEndEffector, NETORJACOBIAN_POS_THRESHOLD, step, step) 
 
-            if np.max(abs(idealDelta))*(k+1) >= maxDistance:
-                idealDelta = endEffector[i] - endEffector[i-1] 
-                k = 1
-            else:
-                k += 1
+            # if np.max(abs(idealDelta))*(k+1) >= maxDistance:
+            #     idealDelta = endEffector[i] - endEffector[i-1] 
+            #     print(idealDelta)
+            #     k = 1
+            # else:
+            k += 1
 
-            writeToFile(File, endEffector[i-1]+idealDelta*k,
+            writeToFile(File, lastRealEndEffector+lastDelta,#endEffector[i-1]+idealDelta*k,
                                 str(endEffectorPosition[0:][0][1])+","+str(endEffectorPosition[1:][0][1])+","\
                                 +str(endEffectorPosition[2:][0][1])+","+str(endEffectorPosition[3:][0][1])+","\
                                 +str(endEffectorPosition[4:][0][1])+","+str(endEffectorPosition[5:][0][1])+","\
@@ -303,4 +313,14 @@ if __name__ == '__main__':
                 break
         
         step += stepSize
+
+        print(step)
+
+        endEffector[0] = np.array([ 0.43, 0.462, 0.121, 1.0, 0.0, 0.0, 0.0 ])
+        endEffector[1] = np.array([ 0.53, 0.462, 0.121, 1.0, 0.0, 0.0, 0.0 ])
+        endEffector[2] = np.array([ 0.53, 0.362, 0.121, 1.0, 0.0, 0.0, 0.0 ])
+        endEffector[3] = np.array([ 0.53, 0.362, 0.021, 1.0, 0.0, 0.0, 0.0 ])
+        endEffector[4] = np.array([ 0.43, 0.362, 0.021, 1.0, 0.0, 0.0, 0.0 ])
+        endEffector[5] = np.array([ 0.43, 0.362, 0.121, 1.0, 0.0, 0.0, 0.0 ])
+        endEffector[6] = np.array([ 0.43, 0.462, 0.121, 1.0, 0.0, 0.0, 0.0 ])
                
